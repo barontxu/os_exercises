@@ -15,12 +15,17 @@ NOTICE
   + 采分点：说明了ucore OS在让外设时钟正常工作的主要准备工作
   - 答案没有涉及如下3点；（0分）
   - 描述了对IDT的初始化，包了针时钟中断的中断描述符的设置（1分）
-  - 除第二点外，进一步描述了对8259中断控制器的初始过程（2分）
+  - 除第二点外，进一步描述对8259中断控制器的初始过程（2分）
   - 除上述两点外，进一步描述了对8253时钟外设的初始化，或描述了对EFLAG操作使能中断（3分）
  ```
 - [x]  
 
 >  
+初始化中断描述符表：向idt数组中写入对应的中断服务例程地址，用lidt()告诉操作系统idt的位置。
+8259中断控制器的初始过程：设置中断掩码，中断向量表偏移量，设置master和slave
+8253时钟外设的初始化：set 8253 timer-chip， initialize time counter 'ticks' to zero，然后pic_enable(IRQ_TIMER);
+
+
 
 lab1中完成了对哪些外设的访问？ (w2l2)
  ```
@@ -32,7 +37,35 @@ lab1中完成了对哪些外设的访问？ (w2l2)
  ```
 - [x]  
 
->  
+>  clock：    
+设置8253时钟
+// set 8253 timer-chip
+    outb(TIMER_MODE, TIMER_SEL0 | TIMER_RATEGEN | TIMER_16BIT);
+    outb(IO_TIMER1, TIMER_DIV(100) % 256);
+    outb(IO_TIMER1, TIMER_DIV(100) / 256);
+然后初始化
+    // initialize time counter 'ticks' to zero
+    ticks = 0;
+
+    cprintf("++ setup timer interrupts\n");
+    pic_enable(IRQ_TIMER);
+
+串口：
+    if (serial_exists) {
+        cons_intr(serial_proc_data);
+    }
+并口:
+lpt_putc(int c) {
+    if (c != '\b') {
+        lpt_putc_sub(c);
+    }
+    else {
+        lpt_putc_sub('\b');
+        lpt_putc_sub(' ');
+        lpt_putc_sub('\b');
+    }
+}
+传输了一些字符串
 
 lab1中的cprintf函数最终通过哪些外设完成了对字符串的输出？ (w2l2)
  ```
@@ -44,7 +77,13 @@ lab1中的cprintf函数最终通过哪些外设完成了对字符串的输出？
  ```
 - [x]  
 
->  
+>  cprintf()调用cons_putc()：
+cons_putc(int c) {
+    lpt_putc(c);  //并口
+    cga_putc(c);  //cga
+    serial_putc(c); //串口
+}
+
 
 ---
 
@@ -55,18 +94,35 @@ lab1中的cprintf函数最终通过哪些外设完成了对字符串的输出？
 lab1中printfmt函数用到了可变参，请参考写一个小的linux应用程序，完成实现定义和调用一个可变参数的函数。(spoc)
 - [x]  
 
-
+>  #include "stdio.h"
+ #include "stdarg.h"
+void list_args(int n, ...){
+  va_list ap;
+  int i;
+  int x;
+  va_start(ap, n);
+  for (i = 0; i < n; i++){
+    x = va_arg(ap, int);
+    printf("No. %d: %d\n", i+1, x);
+  }
+  va_end(ap);
+}
+int main (int argc, char ** argv){
+  list_args(1, 2, 3, 4, 5);
+  printf("\n");
+  return 0;
+}
 
 如果让你来一个阶段一个阶段地从零开始完整实现lab1（不是现在的填空考方式），你的实现步骤是什么？（比如先实现一个可显示字符串的bootloader（描述一下要实现的关键步骤和需要注意的事项），再实现一个可加载ELF格式文件的bootloader（再描述一下进一步要实现的关键步骤和需要注意的事项）...） (spoc)
 - [x]  
 
-> 
+> 首先实现一个基本的bootloader，可以显示字符串；分别先后实现初始寄存器内容；设备管理，封装串口、并口和CGA以完成字符和字符串的输出；实现实模式到保护模式的切换；实现设置栈；实现对字符串的显示，即在实模式转换到保护模式后可以在保护模式下通过PIO方式控制串口、并口和CGA等输出字符串并显示。 然后实现可读ELF格式文件的bootloader：读硬盘，然后可以分析并加载ELF格式文件。(注意：由于bootloader要放在512字节大小的主引导扇区中，所以需要去掉部分显示输出的功能，确保整个bootloader的大小小于510 个字节（最后两个字节用于硬盘主引导扇区标识，即“55AA”）。) 然后增加一个可以显示字符的操作系统ucore，用于验证实现的bootloader可以正确地从硬盘中读出ucore并且加载到正确的内存位置，并且跳转到ucore的起始处，把CPU的控制权交给ucore。ucore获得CPU控制权后能够在保护模式下显示一个字符串，以证明能够正常工作。 然后实现能够显示函数调用关系的ucore，分析出ucore在执行过程中的函数调用关系和函数传递的参数。 然后实现可以管理中断并处理中断方式I/O的ucore，通过中断机制完成设备中断请求处理，首先是初始化中断，涉及初始化中断控制器和中断门描述符表和各种外设，然后是中断服务，在收到中断后进行处理。
 
 
 如何能获取一个系统调用的调用次数信息？如何可以获取所有系统调用的调用次数信息？请简要说明可能的思路。(spoc)
 - [x]  
 
-> 
+> 监控程序可以在用户程序中植入一个hook记录程序的行为，得到系统调用的次数和相关信息。操作系统内核也可以实现这个功能，在运行时使用一块空间来记录所有的系统调用的调用信息，在运行过程中根据程序行为维护这个表，并提供相应的API输出这些信息即可。
 
 如何裁减lab1, 实现一个可显示字符串"THU LAB1"且依然能够正确加载ucore OS的bootloader？如果不能完成实现，请说明理由。
 - [x]  
