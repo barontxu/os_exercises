@@ -22,7 +22,9 @@ NOTICE
  ```
 - [x]  
 
->  
+>  64位CPU支持2^64bit，即16EB，但目前用不到这么大，实际上的物理内存也没用这么大。比如64位的Linux支持46位4TB的物理地址空间。64位CPU体系结构下的页表一般是3级或4级，由于二者的原理相近，在这里只解释三级页表的结构。1级页表PTE大小为32位，虚拟地址结构为页号+页内地址；二级页表，虚拟地址组成为目录地址+页表地址+页内偏移；对32位系统而言加入物理地址扩展PAE后二级页表无法满足要求，故引入三级页表，增加PMD中间目录一级。
+多级页表：cr3寄存器->PGD的首地址->页全局目录->页上级目录->页中间目录->页表->页->物理地址
+在利用反置页表进行地址变换时，是用进程标志符和页号去检索反置页表；若检索完整个页表都未找到与之匹配的页表项，表明此页此时尚未调入内存，对于具有请求调页功能的存储器系统应产生请求调页中断，若无此功能则表示地址出错；如果检索到与之匹配的表项，则该表项的序号i便是该页所在的物理块号，将该块号与页内地址一起构成物理地址。
 
 ## 小组思考题
 ---
@@ -31,7 +33,9 @@ NOTICE
 
 - [x]  
 
-> 500=0.9\*150+0.1\*x
+>设x 为不存在页面访问时间，那么有效访问时间应该为 0.9 \* 150 + 0.1 \* x ,又总时间为500ns，所以有下式  
+500=0.9\*150+0.1\*x
+解得x为3650us
 
 （2）(spoc) 有一台假想的计算机，页大小（page size）为32 Bytes，支持32KB的虚拟地址空间（virtual address space）,有4KB的物理内存空间（physical memory），采用二级页表，一个页目录项（page directory entry ，PDE）大小为1 Byte,一个页表项（page-table entries
 PTEs）大小为1 Byte，1个页目录表大小为32 Bytes，1个页表大小为32 Bytes。页目录基址寄存器（page directory base register，PDBR）保存了页目录表的物理地址（按页对齐）。
@@ -80,6 +84,45 @@ Virtual Address 7268:
     --> pte index:0x13  pte contents:(valid 1, pfn 0x65)
       --> Translates to Physical Address 0xca8 --> Value: 16
 ```
+Virtual Address 0x6c74
+  --> pde index:0x1b pde contents:(valid 1, pfn 0x20)
+    --> pte index:0x03 pte contents:(valid 1, pfn 0x61)
+      --> Translates to Physical Address 0xc34 --> Value: 0x06
+Virtual Address 0x6b22
+  --> pde index:0x1a pde contents:(valid 1, pfn 0x52)
+    --> pte index:0x19 pte contents:(valid 1, pfn 0x47)
+      --> Translates to Physical Address 0x8e2 --> Value: 0x1a
+Virtual Address 0x03df
+  --> pde index:0x00 pde contents:(valid 1, pfn 0x5a)
+    --> pte index:0x1e pte contents:(valid 1, pfn 0x05)
+      --> Translates to Physical Address 0x0bf --> Value: 0x0f
+Virtual Address 0x69dc
+  --> pde index:0x1a pde contents:(valid 1, pfn 0x52)
+    --> pte index:0x0e pte contents:(valid 0, pfn 0x7f)
+      --> Fault (page table entry not valid)
+Virtual Address 0x317a
+  --> pde index:0x0c pde contents:(valid 1, pfn 0x18)
+    --> pte index:0x0b pte contents:(valid 1, pfn 0x35)
+      --> Translates to Physical Address 0x6ba --> Value: 0x1e
+Virtual Address 0x4546
+  --> pde index:0x11 pde contents:(valid 1, pfn 0x21)
+    --> pte index:0x0a pte contents:(valid 0, pfn 0x7f)
+      --> Fault (page table entry not valid)
+Virtual Address 0x2c03
+  --> pde index:0x0b pde contents:(valid 1, pfn 0x44)
+    --> pte index:0x00 pte contents:(valid 1, pfn 0x57)
+      --> Translates to Physical Address 0xae3 --> Value: 0x16
+Virtual Address 0x7fd7
+  --> pde index:0x1f pde contents:(valid 1, pfn 0x12)
+    --> pte index:0x1e pte contents:(valid 0, pfn 0x7f)
+      --> Fault (page table entry not valid)
+Virtual Address 0x390e
+  --> pde index:0x0e pde contents:(valid 0, pfn 0x7f)
+    --> Fault (page directory entry not valid)
+Virtual Address 0x748b
+  --> pde index:0x1d pde contents:(valid 1, pfn 0x00)
+    --> pte index:0x04 pte contents:(valid 0, pfn 0x7f)
+      --> Fault (page table entry not valid)
 
 
 
